@@ -46,14 +46,18 @@ module Danger
     # @return  [void]
     #
     def lint_files(files = nil)
+      puts "hello\n\n"
       # Installs a prose checker if needed
       system 'pip install --user proselint' unless proselint_installed?
 
       # Check that this is in the user's PATH after installing
       raise "proselint is not in the user's PATH, or it failed to install" unless proselint_installed?
+      puts "hello2\n\n"
 
       # Either use files provided, or use the modified + added
       markdown_files = get_files files
+
+      puts "hello3\n\n#{markdown_files}\n\n"
 
       proses = {}
       to_disable = disable_linters || ["misc.scare_quotes", "typography.symbols"]
@@ -70,8 +74,12 @@ module Danger
       if proses.count > 0
         message = "### Proselint found issues\n\n"
         proses.each do |path, prose|
-          github_loc = "/#{current_slug}/tree/#{github.branch_for_head}/#{path}"
-          message << "#### [#{path}](#{github_loc})\n\n"
+          next if prose['data']['errors'].length == 0
+
+          puts "Lofasz: #{prose['data']['errors']}"
+
+          # github_loc = "/#{current_slug}/tree/#{git.branch}/#{path}"
+          message << "#### #{path}\n\n"
 
           message << "Line | Message | Severity |\n"
           message << "| --- | ----- | ----- |\n"
@@ -123,8 +131,8 @@ module Danger
 
       skip_words = ignored_words || []
       File.write(".spelling", skip_words.join("\n"))
-      result_texts = Hash[markdown_files.uniq.collect { |md| [md, `mdspell #{md} -r`.strip] }]
-      spell_issues = result_texts.select { |path, output| output.include? "spelling errors found" }
+      result_texts = Hash[markdown_files.uniq.collect { |md| [md, `mdspell #{md}`.strip] }]
+      spell_issues = result_texts #.select { |path, output| output.include? "spelling errors found" }
       File.unlink(".spelling")
 
       # Get some metadata about the local setup
@@ -133,24 +141,26 @@ module Danger
       if spell_issues.count > 0
         message = "### Spell Checker found issues\n\n"
         spell_issues.each do |path, output|
-          github_loc = "/#{current_slug}/tree/#{github.branch_for_head}/#{path}"
-          message << "#### [#{path}](#{github_loc})\n\n"
+          next if output.lines("\n").select{|line| !skip_words.include?(line.strip.split(":")[2].strip)}.length == 0
+
+          # github_loc = "/#{current_slug}/tree/#{git.branch}/#{path}"
+          message << "#### #{path}\n\n"
 
           message << "Line | Typo |\n"
           message << "| --- | ------ |\n"
 
-          output.lines[1..-3].each do |line|
-            index_info = line.strip.split("|").first
-            index_line, index = index_info.split(":").map { |n| n.to_i }
+          output.lines("\n").select{|line| !skip_words.include?(line.strip.split(":")[2].strip)}.each do |line|
+            index_info = line.strip.split(":")
+            index_line = "#{index_info[0]}:#{index_info[1]}"
 
             file = File.read(path)
 
-            unknown_word = file[index..-1].split(" ").first
+            unknown_word = index_info[2]
 
-            error_text = line.strip.split("|")[1..-1].join("|").strip
-            error = error_text.gsub(unknown_word, "**" + unknown_word + "**")
+            # error_text = line.strip.split("|")[1..-1].join("|").strip
+            # error = error_text.gsub(unknown_word, "**" + unknown_word + "**")
 
-            message << "#{index_line} | #{error} | \n"
+            message << "#{index_line} | #{unknown_word} | \n"
           end
           markdown message
         end
